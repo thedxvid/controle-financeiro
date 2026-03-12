@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { Transaction, Category, Message, Subscription, Investment } from '../types';
 
 const BASE_SYSTEM_PROMPT = `Você é o "Caixa", um assistente financeiro pessoal inteligente e amigável. Você faz parte de um app de controle financeiro completo e tem acesso ao contexto financeiro do usuário, incluindo transações, assinaturas e investimentos.
@@ -51,11 +50,6 @@ Quando houver registro: incluir o bloco <transaction_json> no final da resposta
 Valores monetários formatados como R$ 1.234,56
 Datas no formato DD/MM/AAAA`;
 
-const client = new Anthropic({
-  apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
-  baseURL: '/api/anthropic',
-  dangerouslyAllowBrowser: true,
-});
 
 export async function sendMessageToCaixa(
   message: string,
@@ -105,14 +99,30 @@ export async function sendMessageToCaixa(
   ];
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 1024,
-      system: systemInstruction,
-      messages,
+    const response = await fetch('/api/anthropic/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1024,
+        system: systemInstruction,
+        messages,
+      }),
     });
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('Claude API error:', err);
+      return 'Desculpe, não consegui processar sua solicitação.';
+    }
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text ?? '';
     return text || 'Desculpe, não consegui processar sua solicitação.';
   } catch (error) {
     console.error('Error calling Claude API:', error);
