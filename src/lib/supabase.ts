@@ -1,15 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    '[Caixa] Variáveis de ambiente do Supabase não encontradas.\n' +
-    'Certifique-se de que VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão definidas.\n' +
-    '• Local: arquivo .env na raiz do projeto\n' +
-    '• Vercel: Settings → Environment Variables'
-  );
-}
+// Estas credenciais são públicas por design (anon key do Supabase).
+// A segurança dos dados é garantida pelas políticas RLS no banco de dados.
+const supabaseUrl = 'https://oftsmnmshzvkgllwqhiy.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdHNtbm1zaHp2a2dsbHdxaGl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzMjIyNjQsImV4cCI6MjA4ODg5ODI2NH0.RFwJ0bFIQNxD2FdRRkVcIEneFlKDoXn44d0ansHWuf8';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
