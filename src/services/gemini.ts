@@ -1,8 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
+import { supabase } from '../lib/supabase';
 import { Transaction, Category, Message, Subscription, Investment } from '../types';
-
-// Initialize the Gemini API client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const BASE_SYSTEM_PROMPT = `Você é o "Caixa", um assistente financeiro pessoal inteligente e amigável. Você faz parte de um app de controle financeiro completo e tem acesso ao contexto financeiro do usuário, incluindo transações, assinaturas e investimentos.
 
@@ -91,31 +88,33 @@ export async function sendMessageToCaixa(
     }))
   };
 
-  const systemInstruction = `${BASE_SYSTEM_PROMPT}\n\n## CONTEXTO QUE VOCÊ RECEBERÁ\nA cada mensagem, você receberá no contexto do sistema:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
+  const systemInstruction = `${BASE_SYSTEM_PROMPT}\n\n## CONTEXTO FINANCEIRO DO USUÁRIO\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
-  const contents = history.map(msg => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.content }]
-  }));
-  
-  contents.push({
-    role: 'user',
-    parts: [{ text: message }]
-  });
+  // Build Claude messages array from history
+  const messages = [
+    ...history.map(msg => ({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content,
+    })),
+    { role: 'user', content: message },
+  ];
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      }
+    const { data, error } = await supabase.functions.invoke('chat-ai', {
+      body: {
+        system: systemInstruction,
+        messages,
+      },
     });
 
-    return response.text || "Desculpe, não consegui processar sua solicitação.";
+    if (error) {
+      console.error('Edge function error:', error);
+      return 'Desculpe, ocorreu um erro ao tentar me comunicar. Por favor, tente novamente.';
+    }
+
+    return data?.text || 'Desculpe, não consegui processar sua solicitação.';
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    return "Desculpe, ocorreu um erro ao tentar me comunicar. Por favor, tente novamente.";
+    console.error('Error calling chat-ai:', error);
+    return 'Desculpe, ocorreu um erro ao tentar me comunicar. Por favor, tente novamente.';
   }
 }
