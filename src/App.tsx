@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Wallet, LayoutDashboard, ListOrdered, CreditCard, TrendingUp, X, Plus, Target, CreditCard as CardIcon, Moon, Sun, LogOut } from 'lucide-react';
+import { Send, User, Bot, Wallet, LayoutDashboard, ListOrdered, CreditCard, TrendingUp, X, Plus, Target, CreditCard as CardIcon, Moon, Sun, LogOut, FileUp } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,6 +23,7 @@ import InvestmentsView from './components/InvestmentsView';
 import BudgetsView from './components/BudgetsView';
 import CreditCardsView from './components/CreditCardsView';
 import AddRecordModal from './components/AddRecordModal';
+import ImportPDFModal from './components/ImportPDFModal';
 
 type Tab = 'dashboard' | 'transactions' | 'subscriptions' | 'investments' | 'budgets' | 'cards';
 
@@ -30,6 +31,7 @@ export default function App({ session }: { session: Session }) {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportPDFOpen, setIsImportPDFOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const handleLogout = async () => {
@@ -344,10 +346,17 @@ export default function App({ session }: { session: Session }) {
         </div>
 
         {/* Desktop Top Bar */}
-        <div className="hidden md:flex items-center justify-end px-8 pt-8 max-w-6xl mx-auto w-full">
+        <div className="hidden md:flex items-center justify-end gap-2 px-8 pt-8 max-w-6xl mx-auto w-full">
+          <button
+            onClick={() => setIsImportPDFOpen(true)}
+            className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 px-4 py-2 rounded-xl font-medium transition-colors shadow-sm text-sm"
+          >
+            <FileUp size={16} />
+            Importar PDF
+          </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 px-4 py-2 rounded-xl font-medium transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 px-4 py-2 rounded-xl font-medium transition-colors shadow-sm text-sm"
           >
             <Plus size={18} />
             Novo Registro
@@ -518,6 +527,12 @@ export default function App({ session }: { session: Session }) {
         onAddInvestment={async (i) => { const saved = await insertInvestment(i); setInvestments(prev => [saved, ...prev]); }}
         onAddBudget={async (b) => { const saved = await insertBudget(b); setBudgets(prev => [saved, ...prev]); }}
         onAddCreditCard={async (c) => { const saved = await insertCreditCard(c); setCreditCards(prev => [saved, ...prev]); }}
+      />
+
+      <ImportPDFModal
+        isOpen={isImportPDFOpen}
+        onClose={() => setIsImportPDFOpen(false)}
+        onImported={(newTxs) => setTransactions(prev => [...newTxs, ...prev])}
       />
     </div>
   );
