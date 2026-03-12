@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import Anthropic from '@anthropic-ai/sdk';
 import { Transaction, Category, Message, Subscription, Investment } from '../types';
 
 const BASE_SYSTEM_PROMPT = `Você é o "Caixa", um assistente financeiro pessoal inteligente e amigável. Você faz parte de um app de controle financeiro completo e tem acesso ao contexto financeiro do usuário, incluindo transações, assinaturas e investimentos.
@@ -51,6 +51,11 @@ Quando houver registro: incluir o bloco <transaction_json> no final da resposta
 Valores monetários formatados como R$ 1.234,56
 Datas no formato DD/MM/AAAA`;
 
+const client = new Anthropic({
+  apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
+  dangerouslyAllowBrowser: true,
+});
+
 export async function sendMessageToCaixa(
   message: string,
   history: Message[],
@@ -60,7 +65,7 @@ export async function sendMessageToCaixa(
   investments: Investment[]
 ): Promise<string> {
   const today = new Date().toISOString().split('T')[0];
-  
+
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const totalInvested = investments.reduce((acc, inv) => acc + inv.amount, 0);
@@ -90,31 +95,26 @@ export async function sendMessageToCaixa(
 
   const systemInstruction = `${BASE_SYSTEM_PROMPT}\n\n## CONTEXTO FINANCEIRO DO USUÁRIO\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``;
 
-  // Build Claude messages array from history
   const messages = [
     ...history.map(msg => ({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      role: msg.role === 'assistant' ? 'assistant' as const : 'user' as const,
       content: msg.content,
     })),
-    { role: 'user', content: message },
+    { role: 'user' as const, content: message },
   ];
 
   try {
-    const { data, error } = await supabase.functions.invoke('chat-ai', {
-      body: {
-        system: systemInstruction,
-        messages,
-      },
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1024,
+      system: systemInstruction,
+      messages,
     });
 
-    if (error) {
-      console.error('Edge function error:', error);
-      return 'Desculpe, ocorreu um erro ao tentar me comunicar. Por favor, tente novamente.';
-    }
-
-    return data?.text || 'Desculpe, não consegui processar sua solicitação.';
+    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+    return text || 'Desculpe, não consegui processar sua solicitação.';
   } catch (error) {
-    console.error('Error calling chat-ai:', error);
+    console.error('Error calling Claude API:', error);
     return 'Desculpe, ocorreu um erro ao tentar me comunicar. Por favor, tente novamente.';
   }
 }
