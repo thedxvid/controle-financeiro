@@ -1,11 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Wallet, LayoutDashboard, ListOrdered, CreditCard, TrendingUp, MessageSquare, X, Plus, Target, CreditCard as CardIcon, Moon, Sun } from 'lucide-react';
+import { Send, User, Bot, Wallet, LayoutDashboard, ListOrdered, CreditCard, TrendingUp, X, Plus, Target, CreditCard as CardIcon, Moon, Sun, LogOut } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { INITIAL_CATEGORIES, INITIAL_TRANSACTIONS, INITIAL_SUBSCRIPTIONS, INITIAL_INVESTMENTS, INITIAL_BUDGETS, INITIAL_CREDIT_CARDS } from './constants';
+import { INITIAL_CATEGORIES } from './constants';
 import { Transaction, Category, Message, Subscription, Investment, Budget, CreditCard as CreditCardType } from './types';
 import { sendMessageToCaixa } from './services/gemini';
 import { cn } from './lib/utils';
+import {
+  fetchTransactions, insertTransaction, deleteTransaction,
+  fetchSubscriptions, insertSubscription, deleteSubscription,
+  fetchInvestments, insertInvestment, deleteInvestment,
+  fetchBudgets, insertBudget, deleteBudget,
+  fetchCreditCards, insertCreditCard, deleteCreditCard,
+} from './services/database';
 
 import DashboardView from './components/DashboardView';
 import TransactionsView from './components/TransactionsView';
@@ -17,18 +26,52 @@ import AddRecordModal from './components/AddRecordModal';
 
 type Tab = 'dashboard' | 'transactions' | 'subscriptions' | 'investments' | 'budgets' | 'cards';
 
-export default function App() {
+export default function App({ session }: { session: Session }) {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
-  const [investments, setInvestments] = useState<Investment[]>(INITIAL_INVESTMENTS);
-  const [budgets, setBudgets] = useState<Budget[]>(INITIAL_BUDGETS);
-  const [creditCards, setCreditCards] = useState<CreditCardType[]>(INITIAL_CREDIT_CARDS);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const userEmail = session.user.email ?? '';
+  const userInitial = (session.user.user_metadata?.full_name || userEmail).charAt(0).toUpperCase();
+  const [isDataLoading, setIsDataLoading] = useState(true);
+
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCardType[]>([]);
   const [categories] = useState<Category[]>(INITIAL_CATEGORIES);
+
+  // Carrega todos os dados do Supabase ao iniciar
+  useEffect(() => {
+    async function loadData() {
+      setIsDataLoading(true);
+      try {
+        const [txs, subs, invs, bdg, ccs] = await Promise.all([
+          fetchTransactions(),
+          fetchSubscriptions(),
+          fetchInvestments(),
+          fetchBudgets(),
+          fetchCreditCards(),
+        ]);
+        setTransactions(txs);
+        setSubscriptions(subs);
+        setInvestments(invs);
+        setBudgets(bdg);
+        setCreditCards(ccs);
+      } catch (err) {
+        console.error('Erro ao carregar dados:', err);
+      } finally {
+        setIsDataLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -221,6 +264,25 @@ export default function App() {
               isAssistantOpen ? "bg-emerald-400" : "bg-emerald-500 animate-pulse"
             )} />
           </button>
+
+          {/* User info + Logout */}
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 mt-2">
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                {userInitial}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{userEmail}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                title="Sair"
+                className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          </div>
         </div>
       </nav>
 
@@ -303,32 +365,32 @@ export default function App() {
           {activeTab === 'transactions' && (
             <TransactionsView 
               transactions={transactions} 
-              onDelete={(id) => setTransactions(prev => prev.filter(t => t.id !== id))} 
+              onDelete={async (id) => { await deleteTransaction(id); setTransactions(prev => prev.filter(t => t.id !== id)); }} 
             />
           )}
           {activeTab === 'subscriptions' && (
             <SubscriptionsView 
               subscriptions={subscriptions} 
-              onDelete={(id) => setSubscriptions(prev => prev.filter(s => s.id !== id))} 
+              onDelete={async (id) => { await deleteSubscription(id); setSubscriptions(prev => prev.filter(s => s.id !== id)); }} 
             />
           )}
           {activeTab === 'investments' && (
             <InvestmentsView 
               investments={investments} 
-              onDelete={(id) => setInvestments(prev => prev.filter(i => i.id !== id))} 
+              onDelete={async (id) => { await deleteInvestment(id); setInvestments(prev => prev.filter(i => i.id !== id)); }} 
             />
           )}
           {activeTab === 'budgets' && (
             <BudgetsView 
               budgets={budgets} 
               transactions={transactions}
-              onDelete={(id) => setBudgets(prev => prev.filter(b => b.id !== id))} 
+              onDelete={async (id) => { await deleteBudget(id); setBudgets(prev => prev.filter(b => b.id !== id)); }} 
             />
           )}
           {activeTab === 'cards' && (
             <CreditCardsView 
               cards={creditCards} 
-              onDelete={(id) => setCreditCards(prev => prev.filter(c => c.id !== id))} 
+              onDelete={async (id) => { await deleteCreditCard(id); setCreditCards(prev => prev.filter(c => c.id !== id)); }} 
             />
           )}
         </div>
@@ -451,11 +513,11 @@ export default function App() {
         isOpen={isAddModalOpen} 
         onClose={() => setIsAddModalOpen(false)} 
         categories={categories}
-        onAddTransaction={(t) => setTransactions(prev => [...prev, t])}
-        onAddSubscription={(s) => setSubscriptions(prev => [...prev, s])}
-        onAddInvestment={(i) => setInvestments(prev => [...prev, i])}
-        onAddBudget={(b) => setBudgets(prev => [...prev, b])}
-        onAddCreditCard={(c) => setCreditCards(prev => [...prev, c])}
+        onAddTransaction={async (t) => { const saved = await insertTransaction(t); setTransactions(prev => [saved, ...prev]); }}
+        onAddSubscription={async (s) => { const saved = await insertSubscription(s); setSubscriptions(prev => [saved, ...prev]); }}
+        onAddInvestment={async (i) => { const saved = await insertInvestment(i); setInvestments(prev => [saved, ...prev]); }}
+        onAddBudget={async (b) => { const saved = await insertBudget(b); setBudgets(prev => [saved, ...prev]); }}
+        onAddCreditCard={async (c) => { const saved = await insertCreditCard(c); setCreditCards(prev => [saved, ...prev]); }}
       />
     </div>
   );
