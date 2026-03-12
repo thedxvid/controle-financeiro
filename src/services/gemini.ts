@@ -53,6 +53,7 @@ Datas no formato DD/MM/AAAA`;
 
 const client = new Anthropic({
   apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
+  baseURL: '/api/anthropic',
   dangerouslyAllowBrowser: true,
 });
 
